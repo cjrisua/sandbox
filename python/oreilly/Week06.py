@@ -46,8 +46,10 @@ def ProductPurchaseOption(selection):
     action= input("\nWould you like to purchase this item?(Yes/No) ")
 
     if action.lower().__contains__("y"):
+        #Add Item to Shopping List
         pass
     else:
+        #Do Nothing
        pass
 
 def showUI(selection=None):
@@ -101,7 +103,9 @@ if __name__ == "__main__":
                 if len(optionidxitem) == 0:
                     alertflag = True
                 if optionidxitem[0]["optionidx"].isalpha():
+                    #Shopping List Items
                     ProductPurchaseOption(optionidxitem[0])
+                    #Set Flag back to product category
                     useraction = userSelectionOption()
             except:
                  input("{0} is an Invalid Option!".format(useraction))
