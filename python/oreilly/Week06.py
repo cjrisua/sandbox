@@ -1,5 +1,5 @@
 """ Basic Python Shopping Cart """
-import curses, os, textwrap
+import curses, os, textwrap, uuid
 
 shoppingcart=[]
 inventory=[
@@ -15,9 +15,13 @@ selectionmap = []
 suboption = 'a'
 alertflag = False
 alertmessage = ""
+removeItem = False
 
-def removeItem():
-    print("Remove???")
+def ShowQueueDebug():
+    
+    myshoppingcart = [(x,y) for dic in shoppingcart for (x,y) in dic.items()]
+    for i in myshoppingcart:
+        print(f"id: {i[0]}, dict: {i[1]}")
 
 def getCategoryItem(optionindex):
     return list(filter(lambda x: x["optionidx"] == str(optionindex), selectionmap))[0]
@@ -65,35 +69,54 @@ def ProductPurchaseOption(selection):
     category = dict(selection).get("itemcategory")
     displayItemsToBuy(category, subitemselection)
 
-    action= input("Would you like to purchase '{}' item?(Yes/No) ".format(subitemselection))
+    msg = "\n".join(textwrap.wrap("Purchase '{}' item? (Yes/No) ".format(subitemselection), 65))
 
+    print("=" * 67)
+    action= input(msg + " ")
+    shoppingcartitem = []
     if action.lower().__contains__("y"):
         productcategory=getCategoryItem(category)
-        shoppingcart.append(
+        shoppingcartid = len(shoppingcart)
+        shoppingcartitem = \
             list(
                 filter(
                     lambda x : dict(x).keys().__contains__(productcategory["item"]) and subitemselection in dict(x).values(),
-                    inventory))[0])
+                    inventory))[0]
+        shoppingcart.append( { shoppingcartid : shoppingcartitem})
+        
         alertflag = True
-        alertmessage = "Confirmation: Item added sucessfully!"
+        alertmessage = "Confirmation: Item added successfully!"
     else:
         #Do Nothing
        pass
 
-def ShowUIShoppingCart():
+def ShowUIShoppingCart(readonly=True):
+    
+    global screenId
+
     os.system("clear")
     print("=" * 60)
     print("Shopping Cart".center(60))
     print("=" * 60)
-    uniquecategories = list(set(val for dic in shoppingcart for val in dic.keys() if val != "data" )) 
+
+    #get shopping item list
+    shoppingitems = [val for dic in shoppingcart for val in dic.values()]
+    #shoppingitems = list(lambda x: dict(x).values() in shoppingcart)
+
+    #tuple 1 get you a dictionary
+    uniquecategories = list(set(val for dic in shoppingitems for val in dic.keys() if val != "data" )) 
 
     totaldiscount = 0
     totalamount = 0
-    for category in uniquecategories:
+
+    for catid, category in enumerate(uniquecategories):
         print("{:<59}".format(textwrap.indent(category.title(), "+  ")) + "+")
-        for item in [dic for dic in shoppingcart if category in dic.keys()]:
+        for id,item in enumerate([dic for dic in shoppingitems if category in dic.keys()]):
             discount = float(0)
-            itemname = item[category]
+
+            itemid = [key for dic in shoppingcart for key in dic.keys() if dic[key] == item][0]
+
+            itemname = ("" if readonly is True else f"[{itemid}]") + item[category]
             itemprice = item["data"]["price"]
             totalamount = totalamount + itemprice
             itemonsale = float(0 if "onsale" not in item["data"].keys()  else item["data"]["onsale"])
@@ -107,6 +130,15 @@ def ShowUIShoppingCart():
     print(" "*36 + "Total: ${:,.2f}".format(totalamount - totaldiscount))
     mainmenue="(E)Exit| (VS)Show Shopping Cart [{0}]| (Rm) Remove".format(len(shoppingcart))
     print(mainmenue)
+    if readonly is False:
+        useritemvalue = input("Remove item: ")
+        itemid = [key for dic in shoppingcart for key in dic.items() if key[0] == int(useritemvalue)]
+        if len(itemid) > 0:
+            shoppingcart.pop(itemid[0][0])
+        else:
+            alertflag = True
+            alertmessage = "Item selected Not Found!"
+
 
 def showUI(selection=None):
 
@@ -123,6 +155,10 @@ def showUI(selection=None):
         print(mainmenue)
     elif selection == "vs":
         ShowUIShoppingCart()
+    elif selection == "rm":
+        ShowUIShoppingCart(False)
+    elif selection == "dbg":
+        ShowQueueDebug()
     else:
         try:
             #get user selection option
@@ -160,7 +196,9 @@ if __name__ == "__main__":
         elif useraction.lower() == "vs":
             pass
         elif useraction.lower() == "rm":
-            removeItem()
+            pass
+        elif useraction.lower() == "dbg":
+            pass
         else:
             try:
                 #check for user selection
