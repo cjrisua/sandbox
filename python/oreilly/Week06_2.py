@@ -1,4 +1,4 @@
-import csv,os,uuid,hashlib
+import csv,os,uuid,hashlib,re
 
 userstable = None
 updateatexit = False
@@ -8,7 +8,7 @@ def savesession():
         with open(file="auth.csv.new", mode="w+", newline="\n") as users:
             usrdbfile =  csv.writer(users, delimiter=",")
             #header
-            usrdbfile.writerow( [value for users in userstable for value in dict(users).keys()] )
+            usrdbfile.writerow( [value for value in userstable[0]] )
             for user in userstable:
                 usrdbfile.writerow( [usrinfo for usrinfo in dict(user).values()] )
         os.system("mv auth.csv auth.csv.backup")
@@ -48,59 +48,91 @@ def dbinit():
         usrsession =  csv.reader(usrsession, delimiter=",")
 
 def logginscree():
-
+    
     print("Enter Credentials")
-    #print("Username: {}".format(dict(userinfo).get("username")))
     username = input("Username: ")
     pwd = input("Password: ")
-    return (username,pwd)
+    pwd = hashlib.md5(pwd.encode()).hexdigest()
+    return ({"username": username, "password":pwd})
 
-def authenticate():
+def authenticate(credential):
 
-    logginscree()
+    username = credential["username"]
+    pwd = credential["password"]
 
     if username not in list(map(lambda r : r["username"] , list(userstable) )):
-        register()
+        return False
     else:
         os.system("clear")
         userinfo = list(filter(lambda r : r["username"] == username , list(userstable) ))[0]
 
-        if userinfo["password"] == hashlib.md5(pwd.encode()).hexdigest():
-            print(f"Welcome {username} you session is now Active")
+        if userinfo["password"] == pwd:
+            return True
         else:
             print("Invalid Password")
-
+    return False
 def logout():
-    print("lLog out")
+    print("Logout")
 
 def register():
     password = None
-    ans=input("Would you like to be registered?: (Yes/No) ")
-    if ans.lower() == "yes" or ans.lower() == "y":
-        username=input("User Name: ")
-        password1=input("Password: ")
-        password2=input("Reenter Password: ")
+    os.system("clear")
+    print("=" *65)
+    print("= " + "{:<63}".format("Registration") + "=")
+    print("=" *65)
+    username=input("User Name: ")
+    password1=input("Password: ")
+    password2=input("Reenter Password: ")
 
-        if username.lower() not in userstable:
-            if password1 == password2:
-                password = hashlib.md5(password1.encode())
-            else:
-                os.system("clear")
-                print("Password don't match")
-                register()
+    if username.lower() not in userstable:
+        if password1 == password2:
+            password = hashlib.md5(password1.encode()).hexdigest()
+        else:
+            os.system("clear")
+            print("Password don't match")
+            register()
+        id = uuid.uuid5(uuid.NAMESPACE_DNS, username.lower())
+        newuser = {"id" : id, "username": username, "password" : password}
+        addUser(newuser)
 
-            id = uuid.uuid5(uuid.NAMESPACE_DNS, username.lower())
-            newuser = {"id" : id, "username": username, "password" : password.hexdigest()}
-            addUser(newuser)
-            login(newuser["username"])
-def main():
+def resetPassword():
+    pass
+def main(message):
     os.system("clear")
     print("=" * 65)
-    print("Welcome:")
-    exitloop = True
-    authenticate()
-        
+    print("*"+"Welcome!".center(63)+"*")
+    if message is not None:
+        print("*"+ message.center(63) +"*") 
+    else:
+        print("*"+ " ".center(63) +"*")     
+    print("*"+ "L) Login | P) Password Rest | R) Register | E) Exit".center(63) +"*") 
+    print("=" * 65)
+    action = input("Action: ")
+    
+
+    if action.lower() == "l":
+        credentials = logginscree()
+        status = authenticate(credentials)
+        if status is False:
+            return {"code": False, "message":"Unable to authenticate user"}
+        else:
+            return {"code": False, "message":"Authentication Sucessful!"}
+    elif action.lower() == "p":
+        pass
+    elif action.lower() == "r":
+         register()
+         return {"code": False, "message":"User Registration Sucessful!"}
+    elif action.lower() == "e":
+        savesession()
+        return {"code":True,"message":None}
+    
+    return  {"code":False,"message":"Invalid Option!"}
     
 if  __name__ == "__main__":
     dbinit()
-    main()
+    status =  False
+    returnstatus = {"code": None, "message":None}
+    while status is False:
+        returnstatus = main(returnstatus["message"])
+        status = returnstatus["code"]
+        
