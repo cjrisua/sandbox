@@ -1,7 +1,27 @@
 import csv,os,uuid,hashlib,re
+from datetime import datetime
 
 userstable = None
+sessiontable = []
 updateatexit = False
+
+def getUserId(username):
+    global userstable
+    return list(map(lambda r : r["id"] , list(userstable) ))[0]
+
+def setSessionStatus(username, status):
+    global sessiontable
+    now = datetime.now()
+    sessiontable.append({ "id": (len(sessiontable) + 1), "userid":getUserId(username),"status":status, "lastupdate": now})
+
+def getUserSessionStatus(username):
+    global sessiontable
+
+    filteredbyuserid = list(filter(lambda s : s["userid"] == getUserId(username) , sessiontable))
+    if len(filteredbyuserid) > 0:
+       return list(sorted(filteredbyuserid, key= lambda i: i["id"], reverse=True))[0]
+    else:
+         return []
 
 def savesession():
     if updateatexit == True:
@@ -35,17 +55,25 @@ def dbinit():
         usrdbfile =  csv.reader(users, delimiter=",")
         fieldstomap = None
         users = []
-        userdict = {}
+        #userdict = {}
         for row in usrdbfile:
             if usrdbfile.line_num == 1:
                 fielndstomap = [ {item[0] : item[1] } for item in enumerate(row)]
             else:
                 users.append(dict((getkey(fielndstomap,item[0]), item[1]) for item in enumerate(row)))
                 #dict((y, x) for x, y in t)
+        userstable = tuple(users)
 
-     userstable = tuple(users)
-     with open(file="sessions.csv", mode="r", newline="\n") as usrsession:
-        usrsession =  csv.reader(usrsession, delimiter=",")
+     with open(file="sessions.csv", mode="r", newline="\n") as session:
+        usersession =  csv.reader(session, delimiter=",")
+        fieldstomap = None
+        session = []
+        for row in usersession:
+            if usersession.line_num == 1:
+                fielndstomap = [ {item[0] : item[1] } for item in enumerate(row)]
+            else:
+                session.append(dict((getkey(fielndstomap,item[0]), item[1]) for item in enumerate(row)))
+        sessiontable = tuple(session)
 
 def logginscree():
     
@@ -56,6 +84,8 @@ def logginscree():
     return ({"username": username, "password":pwd})
 
 def authenticate(credential):
+
+    global userstable
 
     username = credential["username"]
     pwd = credential["password"]
@@ -97,12 +127,16 @@ def register():
 
 def resetPassword():
     pass
-def main(message):
+def main(message, KeyHandler=None):
+
+    global sessiontable
+
     os.system("clear")
     print("=" * 65)
     print("*"+"Welcome!".center(63)+"*")
     if message is not None:
-        print("*"+ message.center(63) +"*") 
+        for line in str(message).split("\n"):
+            print("*"+ line.center(63) +"*") 
     else:
         print("*"+ " ".center(63) +"*")     
     print("*"+ "L) Login | P) Password Rest | R) Register | E) Exit".center(63) +"*") 
@@ -116,7 +150,13 @@ def main(message):
         if status is False:
             return {"code": False, "message":"Unable to authenticate user"}
         else:
-            return {"code": False, "message":"Authentication Sucessful!"}
+            session = getUserSessionStatus(credentials["username"])
+            if len(session) > 0: #and session["status"].lower() == "open":
+                return {"code": False, "message":"{0} session open since {1}!\nWould you like to (Lo)Logout or Exist?".format(credentials["username"],session["lastupdate"]),"KeyHandler": "lo"}
+            else:
+                setSessionStatus(credentials["username"],"OPEN")
+                return {"code": False, "message":"{0} has been authenticated!".format(credentials["username"])}
+                
     elif action.lower() == "p":
         pass
     elif action.lower() == "r":
@@ -125,14 +165,18 @@ def main(message):
     elif action.lower() == "e":
         savesession()
         return {"code":True,"message":None}
-    
+    elif KeyHandler != None:
+        if keyhandler.lower() == "lo":
+            return {"code":True,"message":"Bye!"}
     return  {"code":False,"message":"Invalid Option!"}
     
 if  __name__ == "__main__":
     dbinit()
     status =  False
     returnstatus = {"code": None, "message":None}
+    keyhandler = None
     while status is False:
-        returnstatus = main(returnstatus["message"])
+        returnstatus = main(returnstatus["message"],keyhandler)
         status = returnstatus["code"]
+        keyhandler = returnstatus.get("KeyHandler",None)
         
