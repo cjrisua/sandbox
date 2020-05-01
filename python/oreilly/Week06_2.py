@@ -2,17 +2,26 @@ import csv,os,uuid,hashlib,re
 from datetime import datetime
 
 userstable = None
-sessiontable = []
+sessiontable = None
 updateatexit = False
 
 def getUserId(username):
     global userstable
-    return list(map(lambda r : r["id"] , list(userstable) ))[0]
+    user = list(filter(lambda r : r["username"] == username , list(userstable) ))
+    if len(user) > 0:
+        return user[0]["id"]
+    else:
+        return None
 
 def setSessionStatus(username, status):
     global sessiontable
     now = datetime.now()
-    sessiontable.append({ "id": (len(sessiontable) + 1), "userid":getUserId(username),"status":status, "lastupdate": now})
+    
+    mysession = list(filter(lambda s: dict(s)["userid"] == getUserId(username)  , sessiontable))
+    if len(mysession) > 0:
+        mysession[0]["status"] = status
+    else:
+        sessiontable.append({ "id": (len(sessiontable) + 1), "userid":getUserId(username),"status":status, "lastupdate": now})
 
 def getUserSessionStatus(username):
     global sessiontable
@@ -24,6 +33,9 @@ def getUserSessionStatus(username):
          return []
 
 def savesession():
+
+    global userstable,sessiontable
+
     if updateatexit == True:
         with open(file="auth.csv.new", mode="w+", newline="\n") as users:
             usrdbfile =  csv.writer(users, delimiter=",")
@@ -33,6 +45,16 @@ def savesession():
                 usrdbfile.writerow( [usrinfo for usrinfo in dict(user).values()] )
         os.system("mv auth.csv auth.csv.backup")
         os.system("mv auth.csv.new auth.csv")
+    
+    '''Save session status'''
+    with open(file="sessions.csv.new", mode="w+", newline="\n") as session:
+        usersession = csv.writer(session, delimiter=",")
+        #header
+        usersession.writerow([value for value in sessiontable[0]] )
+        for session in sessiontable:
+                usersession.writerow( [session for session in dict(session).values()] )
+        os.system("mv sessions.csv sessions.csv.backup")
+        os.system("mv sessions.csv.new sessions.csv")
 
 def addUser(user):
     global userstable, updateatexit
@@ -40,7 +62,7 @@ def addUser(user):
     tmptble = [row for row in userstable]
     tmptble.append(user)
     userstable = None
-    userstable = tuple(tmptble)
+    userstable = [row for row in tmptble]
 
 def getkey(mapping, index):
     for v in mapping:
@@ -48,7 +70,8 @@ def getkey(mapping, index):
             return dict(v).get(index)
 def dbinit():
 
-     global userstable
+     global userstable,sessiontable
+
      initusrtable = []
 
      with open(file="auth.csv", mode="r", newline="\n") as users:
@@ -73,7 +96,7 @@ def dbinit():
                 fielndstomap = [ {item[0] : item[1] } for item in enumerate(row)]
             else:
                 session.append(dict((getkey(fielndstomap,item[0]), item[1]) for item in enumerate(row)))
-        sessiontable = tuple(session)
+        sessiontable = [s for s in session]
 
 def logginscree():
     
@@ -104,32 +127,75 @@ def authenticate(credential):
 def logout():
     print("Logout")
 
-def register():
+def resetPassword(msg=None):
+    global userstable, updateatexit
+    updateatexit = True
     password = None
     os.system("clear")
     print("=" *65)
-    print("= " + "{:<63}".format("Registration") + "=")
+    print("= " + "{}".format("{}".format("Password Rest") + (f": {msg}" if msg != None else "")).center(62) + "=")
+    print("= "+ "{:<62}".format("B) Back") + "=") 
     print("=" *65)
     username=input("User Name: ")
-    password1=input("Password: ")
-    password2=input("Reenter Password: ")
+    if username.lower() == "b":
+        return False
+    usercheck = list(filter(lambda u: u["username"] == username.lower(), userstable))
+    
+    password1=input("New Password: ")
+    password2=input("Reenter New Password: ")
+    if username.lower() == "b":
+        return False
 
-    if username.lower() not in userstable:
+    if len(usercheck) == 1:
         if password1 == password2:
             password = hashlib.md5(password1.encode()).hexdigest()
         else:
             os.system("clear")
-            print("Password don't match")
-            register()
-        id = uuid.uuid5(uuid.NAMESPACE_DNS, username.lower())
-        newuser = {"id" : id, "username": username, "password" : password}
-        addUser(newuser)
+            passwordrest("Password don't match")
+        usercheck[0]["password"] = password
+    else:
+        os.system("clear")
+        passwordrest("User already exists!")
 
-def resetPassword():
-    pass
-def main(message, KeyHandler=None):
+def register(msg=None):
+    password = None
+    os.system("clear")
+    print("=" *65)
+    print("= " + "{}".format("{}".format("Registration") + (f": {msg}" if msg != None else "")).center(62) + "=")
+    print("= "+ "{:<62}".format("B) Back") + "=") 
+    print("=" *65)
+    username=input("User Name: ")
+
+    if username.lower() == "b":
+        return False
+
+    password1=input("Password: ")
+    password2=input("Reenter Password: ")
+
+    if username.lower() == "b":
+        return False
+    usercheck = list(filter(lambda u: u["username"] == username.lower(), userstable))
+
+
+    if len(usercheck) == 0:
+        if password1 == password2:
+            password = hashlib.md5(password1.encode()).hexdigest()
+        else:
+            os.system("clear")
+            register("Password don't match")
+        id = uuid.uuid5(uuid.NAMESPACE_DNS, username.lower())
+        newuser = {"id" : id, "username": username.lower(), "password" : password}
+        addUser(newuser)
+    else:
+        os.system("clear")
+        register("User already exists!")
+
+def main(**kwargs):
 
     global sessiontable
+    message = kwargs["Message"]
+    refusername = kwargs["Username"]
+    KeyHandler = kwargs["Keyhandler"]
 
     os.system("clear")
     print("=" * 65)
@@ -148,35 +214,43 @@ def main(message, KeyHandler=None):
         credentials = logginscree()
         status = authenticate(credentials)
         if status is False:
-            return {"code": False, "message":"Unable to authenticate user"}
+            return {"code": False, "Message":"Unable to authenticate user"}
         else:
             session = getUserSessionStatus(credentials["username"])
-            if len(session) > 0: #and session["status"].lower() == "open":
-                return {"code": False, "message":"{0} session open since {1}!\nWould you like to (Lo)Logout or Exist?".format(credentials["username"],session["lastupdate"]),"KeyHandler": "lo"}
+            if len(session) > 0 and session["status"].lower() == "open":
+                return {"code": False, "Message":"{0} session open since {1}!\nWould you like to (Lo)Logout or Exist?".format(credentials["username"],session["lastupdate"]),"Keyhandler": "lo", "Username": credentials["username"]}
             else:
                 setSessionStatus(credentials["username"],"OPEN")
-                return {"code": False, "message":"{0} has been authenticated!".format(credentials["username"])}
+                return {"code": False, "Message":"{0} has been authenticated!".format(credentials["username"])}
                 
     elif action.lower() == "p":
-        pass
+        resetPassword()
+    elif action.lower() == "show":
+        return {"code" : False, "Message" : sessiontable}
     elif action.lower() == "r":
-         register()
-         return {"code": False, "message":"User Registration Sucessful!"}
+         status = register()
+         if status !=  False:
+            return {"code": False, "Message":"User Registration Sucessful!"}
+         else:
+             return {"code": False, "Message":"Registration Cancelled!"}
     elif action.lower() == "e":
         savesession()
-        return {"code":True,"message":None}
+        return {"code":True,"Message":None}
     elif KeyHandler != None:
-        if keyhandler.lower() == "lo":
-            return {"code":True,"message":"Bye!"}
-    return  {"code":False,"message":"Invalid Option!"}
+        if KeyHandler.lower() == "lo":
+            setSessionStatus(refusername,"CLOSED")
+            return {"code":False,"Message":f"Logging off {refusername}!"}
+
+    return  {"code":False,"Message":"Invalid Option!"}
     
 if  __name__ == "__main__":
     dbinit()
     status =  False
-    returnstatus = {"code": None, "message":None}
-    keyhandler = None
+    returnstatus = {}
     while status is False:
-        returnstatus = main(returnstatus["message"],keyhandler)
+        returnstatus = main(
+            Message=returnstatus.get("Message",None),
+            Keyhandler=returnstatus.get("Keyhandler",None),
+            Username=returnstatus.get("Username",None))
         status = returnstatus["code"]
-        keyhandler = returnstatus.get("KeyHandler",None)
         
